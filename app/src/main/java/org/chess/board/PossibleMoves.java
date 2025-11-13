@@ -30,6 +30,10 @@ public class PossibleMoves {
     // remove the move from the dangerMap using position and color as keys.
   }
 
+  public void forgetPiece(Piece piece) {
+    // run forgetMove for all piece's moves.
+  }
+
   public void submitMove(Move move) {
     // get piece that's beeing moved
     // add move to the movesMap using the piece as key
