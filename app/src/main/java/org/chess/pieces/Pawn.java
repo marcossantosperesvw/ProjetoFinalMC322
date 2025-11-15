@@ -26,6 +26,30 @@ public class Pawn extends Piece{
         int row = thisPos.row();
         int column = thisPos.column();
 
+        //switch to help dealing with four possible directions of the pawns
+        //Ficou meio feio, mas outras opções que pesquisei tornaria o código menos legível
+        int[] directionHelper;
+        switch(super.color){
+            case GREEN:
+                //Left side piece position
+                //Right side piece position
+                //Left side attack position
+                //Right side attack position
+                //Simple move position
+                directionHelper = new int[]{0, -1, 0, 1, -1, -1, -1, 1, -1, 0};
+                break;
+            case YELLOW:
+                directionHelper = new int[]{-1, 0, 1, 0, -1, 1, 1, 1, 0, 1};
+                break;
+            case RED:
+                directionHelper = new int[]{0, 1, 0, -1, 1, 1, 1, -1, 1, 0};
+                break;
+            case BLUE:
+                directionHelper = new int[]{1, 0, -1, 0, 1, -1, -1, -1, 0, -1};
+                break;
+            default:
+                throw new IllegalArgumentException();
+        }
         //En-Passsant check
         //Gets the last move made
         List<Move> history = super.board.history.getMovesView();
@@ -34,61 +58,6 @@ public class Pawn extends Piece{
             lastMove = history.get(history.size() - 1);
         }
 
-        //switch to help dealing with four possible directions of the pawns
-        //Ficou meio feio, mas outras opções que pesquisei tornaria o código menos legível
-        int[] directionHelper = new int[10];
-        switch(super.color){
-            case GREEN:
-                directionHelper[0] = 0;
-                directionHelper[1] = -1;
-                directionHelper[2] = 0;
-                directionHelper[3] = 1;
-                directionHelper[4] = 1;
-                directionHelper[5] = -1;
-                directionHelper[6] = 1;
-                directionHelper[7] = 1;
-                directionHelper[8] = -1;
-                directionHelper[9] = 0;
-                break;
-            case YELLOW:
-                directionHelper[0] = -1;
-                directionHelper[1] = 0;
-                directionHelper[2] = 1;
-                directionHelper[3] = 0;
-                directionHelper[4] = -1;
-                directionHelper[5] = 1;
-                directionHelper[6] = 1;
-                directionHelper[7] = 1;
-                directionHelper[8] = 0;
-                directionHelper[9] = 1;
-                break;
-            case RED:
-                directionHelper[0] = 0;
-                directionHelper[1] = 1;
-                directionHelper[2] = 0;
-                directionHelper[3] = -1;
-                directionHelper[4] = 1;
-                directionHelper[5] = 1;
-                directionHelper[6] = 1;
-                directionHelper[7] = -1;
-                directionHelper[8] = 1;
-                directionHelper[9] = 0;
-                break;
-            case BLUE:
-                directionHelper[0] = 1;
-                directionHelper[1] = 0;
-                directionHelper[2] = -1;
-                directionHelper[3] = 0;
-                directionHelper[4] = 1;
-                directionHelper[5] = -1;
-                directionHelper[6] = -1;
-                directionHelper[7] = -1;
-                directionHelper[8] = 0;
-                directionHelper[9] = -1;
-                break;
-            default:
-                throw new IllegalArgumentException();
-        }
         //Checks if last move was a double pawn move
         if(lastMove.type() == MoveType.PAWN_DOUBLE){
             //Checks if that pawn is in this pawn's side
@@ -125,14 +94,62 @@ public class Pawn extends Piece{
         
 
         //Simple Move check
-        Pos tempPos = new Pos(row + directionHelper[8], column + directionHelper[9]);
+        int tempRow = row + directionHelper[8];
+        int tempColumn = column + directionHelper[9];
+        Pos tempPos = new Pos(tempRow, tempColumn);
         Piece pieceInPos = super.board.getPiece(tempPos);
         if(pieceInPos == null){
-            validMoves.add(new Move(this, MoveType.PAWN_DOUBLE, tempPos));
+            if(tempRow == 0 || tempRow == 13 || tempColumn == 0 || tempColumn == 13){
+                validMoves.add(new Move(this, MoveType.QUEEN_PROMOTION, tempPos));
+                validMoves.add(new Move(this, MoveType.KNIGHT_PROMOTION, tempPos));
+                validMoves.add(new Move(this, MoveType.ROOK_PROMOTION, tempPos));
+                validMoves.add(new Move(this, MoveType.BISHOP_PROMOTION, tempPos));
+            }else{
+                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
+            }  
         }else{
             piecesBlockingMoves.add(pieceInPos);
         }
 
+        //Left Attack-Move check
+        try{
+            tempRow = row + directionHelper[4];
+            tempColumn = column + directionHelper[5];
+            tempPos = new Pos(tempRow, tempColumn);
+            pieceInPos = super.board.getPiece(tempPos);
+            if(pieceInPos == null){
+                if(tempRow == 0 || tempRow == 13 || tempColumn == 0 || tempColumn == 13){
+                    validMoves.add(new Move(this, MoveType.QUEEN_PROMOTION, tempPos));
+                    validMoves.add(new Move(this, MoveType.KNIGHT_PROMOTION, tempPos));
+                    validMoves.add(new Move(this, MoveType.ROOK_PROMOTION, tempPos));
+                    validMoves.add(new Move(this, MoveType.BISHOP_PROMOTION, tempPos));
+                }else{
+                    validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
+                }  
+            }else{
+                piecesBlockingMoves.add(pieceInPos);
+            }
+        }catch(Exception e){}
+
+        //Right Attack-Move check
+        try{
+            tempRow = row + directionHelper[6];
+            tempColumn = column + directionHelper[7];
+            tempPos = new Pos(tempRow, tempColumn);
+            pieceInPos = super.board.getPiece(tempPos);
+            if(pieceInPos == null){
+                if(tempRow == 0 || tempRow == 13 || tempColumn == 0 || tempColumn == 13){
+                    validMoves.add(new Move(this, MoveType.QUEEN_PROMOTION, tempPos));
+                    validMoves.add(new Move(this, MoveType.KNIGHT_PROMOTION, tempPos));
+                    validMoves.add(new Move(this, MoveType.ROOK_PROMOTION, tempPos));
+                    validMoves.add(new Move(this, MoveType.BISHOP_PROMOTION, tempPos));
+                }else{
+                    validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
+                }  
+            }else{
+                piecesBlockingMoves.add(pieceInPos);
+            }
+        }catch(Exception e){}
 
         return new MovesCalcResult(validMoves, piecesBlockingMoves);
     }

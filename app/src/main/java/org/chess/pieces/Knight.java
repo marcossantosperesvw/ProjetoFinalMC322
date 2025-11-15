@@ -38,26 +38,24 @@ public class Knight extends Piece{
         };
 
         //creating a list of valid positions in the board
-        ArrayList<Pos> validPositions = new ArrayList<Pos>();
-        for(int[] pos : possibleMoves){
-            try{
-                Pos movePos = new Pos(pos[0], pos[1]);
-                validPositions.add(movePos);
-
-            }catch(IllegalArgumentException e){}
-        }
 
         //Checks if those positions would generate validMoves,
         //then, fills validMoves and piecesBlockingMoves
-        for(Pos pos : validPositions){
-            Piece pieceInPos = super.board.getPiece(pos);
-            if(pieceInPos != null){
-                if(pieceInPos.color == super.color){
-                    piecesBlockingMoves.add(pieceInPos);
-                    break;
-                }
-            }
-            validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
+        for(int[] pos : possibleMoves){
+            try{
+                Pos tempPos = new Pos(pos[0], pos[1]);
+                Piece pieceInPos = super.board.getPiece(tempPos);
+                if(pieceInPos != null){
+					if(pieceInPos.color == super.color){
+						piecesBlockingMoves.add(pieceInPos);
+					}else{
+						validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
+					}
+				}else{
+					validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
+				}
+                
+            }catch(IllegalArgumentException e){}
         }
 
         return new MovesCalcResult(validMoves, piecesBlockingMoves);
