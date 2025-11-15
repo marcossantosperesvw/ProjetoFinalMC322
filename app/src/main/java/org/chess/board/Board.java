@@ -1,6 +1,7 @@
 package org.chess.board;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,9 @@ import org.chess.pieces.Rook;
  * TODO
  */
 public class Board {
+  // ##################################################
+  // Data structures
+  // ##################################################
 
   /** Data structure to store all pieces, and their positions. */
   private final BoardState boardState = new BoardState();
@@ -33,9 +37,10 @@ public class Board {
   /** Match's history. */
   public final History history = new History();
 
-  /**
-   * @param clockTimeNanosec
-   */
+  // ##################################################
+  // Constructor
+  // ##################################################
+
   public Board(long clockTimeNanosec) {
     EnumMap<Color, List<org.chess.pieces.Piece>> playersPieces = new EnumMap<>(Color.class);
 
@@ -52,6 +57,10 @@ public class Board {
     } // TODO: refactor everything.
   }
 
+  // ##################################################
+  // ReadOnly operations
+  // ##################################################
+
   public int getNOfPlayers() {
     return players.size();
   }
@@ -60,13 +69,29 @@ public class Board {
     return players.get(color);
   }
 
-  public List<King> getEndangeredKings() {
+  public Collection<King> getCheckedKings() {
     return players.values()
         .stream()
         .map(p -> p.king())
         .filter(p -> boardState.isDangerous(boardState.getPos(p), p.color))
         .toList();
   }
+
+  public boolean hasMoves(Color color) {
+    for (Piece piece : players.get(color).pieces()) {
+      if (boardState.getReadonlyMoves(piece).size() > 0) // TODO: Find a way to not look through all pieces.
+        return true;
+    }
+    return false;
+  }
+
+  public Collection<Move> getMovesView(Piece piece) {
+    return boardState.getReadonlyMoves(piece);
+  }
+
+  // ##################################################
+  // Mutating operations
+  // ##################################################
 
   public void doMove(Move move) {
     // TODO: check player clock to see if it still has time?
@@ -102,8 +127,8 @@ public class Board {
       case KINGSIDE_CASTLING:
         boardState.movePiece(move.piece(), move.movingTo());
         Pos rookPos = switch (move.piece().color) {
-          case RED -> new Pos(1,6);
-          case BLUE -> new Pos (9, 14);
+          case RED -> new Pos(1, 6);
+          case BLUE -> new Pos(9, 14);
           case YELLOW -> new Pos(6, 1);
           case GREEN -> new Pos(14, 9);
         };
@@ -117,28 +142,9 @@ public class Board {
     }
   }
 
-  /**
-   * Returns true if a player has valid moves. false otherwise
-   * 
-   * @param player's color
-   * @return
-   */
-  public boolean hasMoves(Color color) {
-    for (Piece piece : players.get(color).pieces()) {
-      if (moves.getMovesView(piece).size() > 0) // TODO: Find a way to not look through all pieces.
-        return true;
-    }
-    return false;
-  }
-
-  /**
-   * @param piece
-   * @return A view of all moves that `piece` can make.
-   */
-  public List<Move> getMovesView(Piece piece) {
-    // just a public wrapper.
-    return moves.getMovesView(piece);
-  }
+  // ##################################################
+  // Helper methods
+  // ##################################################
 
   /**
    * A helper record.
@@ -150,7 +156,7 @@ public class Board {
    * A helper function to construct all pieces. The pieces follow the layout
    * below, with red on top, yellow on the left side, blue on the right side and
    * green on the bottom.
-   Top left corner is (1,1).
+   * Top left corner is (1,1).
    *
    * ___rkbKqbkr___
    * ___pppppppp___

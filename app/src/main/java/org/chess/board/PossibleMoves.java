@@ -1,6 +1,7 @@
 package org.chess.board;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -53,8 +54,8 @@ class PossibleMoves {
     moves.forEach(m -> add(m));
   }
 
-  Collection<Move> get(Piece piece) {
-    return pieceMovesMap.get(piece);
+  Collection<Move> getReadonly(Piece piece) {
+    return Collections.unmodifiableCollection(pieceMovesMap.get(piece));
   }
 
 }

@@ -6,19 +6,18 @@ import org.chess.Color;
 import org.chess.Move;
 import org.chess.PieceNotInBoard;
 import org.chess.Pos;
-import org.chess.board.Board;
+
+import com.google.common.collect.BiMap;
 
 public abstract class Piece {
   public final Color color;
-  public final Board board;
   
-  public Piece(Color color, Board board) {
+  public Piece(Color color) {
     this.color = color;
-    this.board = board;
   }
 
   public static record MovesCalcResult(Collection<Move> moves, Collection<Pos> dependencies) {}
   
-  public abstract MovesCalcResult calculateMoves() throws PieceNotInBoard;
+  public abstract MovesCalcResult calculateMoves(BiMap<Pos, Piece> boardState) throws PieceNotInBoard;
 
 }

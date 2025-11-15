@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Objects;
 
 import org.chess.Color;
+import org.chess.Move;
 import org.chess.PieceNotInBoard;
 import org.chess.pieces.King;
 import org.chess.pieces.Piece;
@@ -12,6 +13,7 @@ import org.chess.Pos;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.google.common.collect.Maps;
 
 /**
  * Manages the relation between each piece and its position.
@@ -81,6 +83,10 @@ class BoardState {
    */
   boolean isDangerous(Pos pos, Color color) {
     return moves.isDangerous(pos, color);
+  }
+
+  Collection<Move> getReadonlyMoves(Piece piece) {
+    return moves.getReadonly(piece);
   }
 
   // ##################################################
@@ -195,7 +201,7 @@ class BoardState {
         kings.add(king);
       } else {
         try {
-          var calcResult = piece.calculateMoves();
+          var calcResult = piece.calculateMoves(Maps.unmodifiableBiMap(boardState));
           dependencies.addAll(piece, calcResult.dependencies());
           moves.addAll(calcResult.moves());
         } catch (PieceNotInBoard e) {
@@ -207,8 +213,6 @@ class BoardState {
     for (King king : kings) {
       try {
         var calcResult = king.calculateMoves();
-
-        king.calculateMoves(isDangerous);
         dependencies.addAll(king, calcResult.dependencies());
         moves.addAll(calcResult.moves());
       } catch (PieceNotInBoard e) {
