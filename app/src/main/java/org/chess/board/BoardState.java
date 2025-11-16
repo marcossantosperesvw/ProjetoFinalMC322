@@ -1,13 +1,17 @@
 package org.chess.board;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.chess.Color;
 import org.chess.Move;
 import org.chess.PieceNotInBoard;
 import org.chess.pieces.King;
+import org.chess.pieces.NonKing;
 import org.chess.pieces.Piece;
 import org.chess.Pos;
 
@@ -41,14 +45,18 @@ class BoardState {
    * `reevaluate` method. Read the method's docstring to know when it must be
    * called.
    */
-  private final PossibleMoves moves = new PossibleMoves(); 
+  private final PossibleMoves moves = new PossibleMoves();
+
+  private final Map<Color, King> kingsMap = new EnumMap<>(Color.class);
 
   // ##################################################
   // Constructor
   // ##################################################
 
   BoardState() {
-    // TODO: when starting a new game, all pieces are added. But the `add` method reevaluates for every piece. which is not necessary. Maybe the constructor should receice the initial state??
+    // TODO: when starting a new game, all pieces are added. But the `add` method
+    // reevaluates for every piece. which is not necessary. Maybe the constructor
+    // should receice the initial state??
   }
 
   // ##################################################
@@ -96,7 +104,8 @@ class BoardState {
   /**
    * @param piece
    * @param pos
-   * @throws IllegalArgumentException if parameters are null, or if there's already a
+   * @throws IllegalArgumentException if parameters are null, or if there's
+   *                                  already a
    *                                  piece at pos, or if the piece is already on
    *                                  the board.
    */
@@ -115,9 +124,15 @@ class BoardState {
           "Invalid Piece: This piece is already at another position. Use .move instead.");
     }
 
+    if (piece instanceof King king) {
+      if (kingsMap.get(king.color) != null)
+        throw new IllegalArgumentException("Invalid King: cannot add two kings with the same color.");
+      kingsMap.put(king.color, king);
+    }
+
     Collection<Piece> needReevaluation = dependencies.getDependents(pos);
     needReevaluation.add(piece);
-    reevaluateAll(needReevaluation);
+    reevaluate(needReevaluation);
   }
 
   /**
@@ -125,13 +140,7 @@ class BoardState {
    * @throws IllegalArgumentException if piece is not on the board
    */
   void removePiece(Piece piece) {
-    Pos pos = boardState.inverse().remove(piece);
-    if (pos == null) {
-      throw new IllegalArgumentException("Invalid Piece: This piece is not on the board.");
-    }
-    Collection<Piece> needReevaluation = dependencies.getDependents(pos);
-    needReevaluation.add(piece);
-    reevaluateAll(needReevaluation);
+    reevaluate(removePieceHelper(piece));
   }
 
   /**
@@ -152,13 +161,12 @@ class BoardState {
 
     Piece capturedPiece = getPiece(toPos);
     if (capturedPiece != null) {
-      boardState.inverse().remove(capturedPiece);
-      needReevaluation.add(capturedPiece);
+      needReevaluation.addAll(removePieceHelper(piece));
     }
 
     boardState.forcePut(toPos, piece);
 
-    reevaluateAll(needReevaluation);
+    reevaluate(needReevaluation);
 
     return capturedPiece;
   }
@@ -166,6 +174,19 @@ class BoardState {
   // ##################################################
   // Private helper functions
   // ##################################################
+
+  private Collection<Piece> removePieceHelper(Piece piece) {
+    Pos pos = boardState.inverse().remove(piece);
+    if (pos == null) {
+      throw new IllegalArgumentException("Invalid Piece: This piece is not on the board.");
+    }
+    if (piece instanceof King king) {
+      kingsMap.remove(king.color);
+    }
+    Collection<Piece> needReevaluation = dependencies.getDependents(pos);
+    needReevaluation.add(piece);
+    return needReevaluation;
+  }
 
   /**
    * This is a function to mutate the `dependencies` and `moves` data structures.
@@ -176,50 +197,73 @@ class BoardState {
    * 
    * @param pieces that need to be reevaluated
    */
-  private void reevaluateAll(Collection<Piece> pieces) {
-    // Reevaluation consists of:
-    // - Removing from the data structures all stored moves and dependencies from a
-    // piece.
-    // - Calculating all dependencies and possible moves.
-    // - Adding them to the data structures.
-    // Calculation is made by the piece based on the board's state.
-    // Since kings can't checkmate themselves, they need to know every move from
-    // every piece.
-    // Therefore their calculation must be deferred.
-
-    Collection<King> kings = new ArrayList<>();
-
-    // TODO: the `moves` data structure is beeing changed. Pieces cannot try to call `isDangerous`, because result may be wrong.
-    // TODO: The order in which kings are evaluated matters. THIS MUST BE FIXED
-
-    // Both problems are the same. I think they can be solved if we prohibit pieces from calling `isDangerous`, and then we just filter kings' moves. 
-    
+  private void reevaluate(Collection<Piece> pieces) {
     for (Piece piece : pieces) {
-      moves.removeAll(piece);
-      dependencies.removeAll(piece);
-      if (piece instanceof King king) {
-        kings.add(king);
-      } else {
-        try {
-          var calcResult = piece.calculateMoves(Maps.unmodifiableBiMap(boardState));
-          dependencies.addAll(piece, calcResult.dependencies());
-          moves.addAll(calcResult.moves());
-        } catch (PieceNotInBoard e) {
-          continue;
-        }
+      if (piece instanceof NonKing nonKing) {
+        reevaluate(nonKing);
       }
     }
 
-    for (King king : kings) {
-      try {
-        var calcResult = king.calculateMoves();
-        dependencies.addAll(king, calcResult.dependencies());
-        moves.addAll(calcResult.moves());
-      } catch (PieceNotInBoard e) {
-        continue;
+    // Since kings can't checkmate themselves, they need to know every move from
+    // every piece. Therefore their calculation must be deferred.
+    reevaluateKings();
+  }
+
+  /**
+   * Reevaluation consists of:
+   * - Removing from the data structures all stored moves and dependencies from a
+   * piece.
+   * - Calculating all dependencies and possible moves.
+   * - Adding them to the data structures.
+   * 
+   * Since `calculateMoves` assumes the piece is from the player in the bottom,
+   * the board must be rotated before sending it to the piece, and the result must
+   * be rotated back.
+   */
+  private void reevaluate(NonKing piece) {
+    moves.removeAll(piece);
+    dependencies.removeAll(piece);
+    try {
+      var calcResult = piece.calculateMoves(
+          makeGetPiece(piece.color),
+          makeGetPos(piece.color));
+
+      for (Pos pos : calcResult.dependencies()) {
+        dependencies.add(piece, pos.fromPerspective(piece.color));
       }
+
+      for (Move m : calcResult.moves()) {
+        moves.add(new Move(
+            m.piece(),
+            m.type(),
+            m.movingTo().fromPerspective(piece.color)));
+      }
+    } catch (PieceNotInBoard e) {
+      throw new IllegalStateException("Tried to reevaluate piece that's not on the board");
     }
   }
+
+  private void reevaluateKings() {
+    var kings = kingsMap.values();
+    for (King king : kings) {
+      moves.removeAll(king);
+    }
+    try {
+      King.calculateMoves(kings, Maps.unmodifiableBiMap(boardState), makeDangerMap()).forEach(moves::add);
+    } catch (PieceNotInBoard e) {
+      throw new IllegalStateException("Tried to reevaluate piece that's not on the board");
+    }
+  }
+
+  private Function<Piece, Pos> makeGetPos(Color color) {
+    return (piece) -> boardState.inverse().get(piece).toPerspective(color);
+  }
+
+  private Function<Pos, Piece> makeGetPiece(Color color) {
+    return (pos) -> boardState.get(pos.fromPerspective(color));
+  }
+
+  private Function<Color, Predicate<Pos>> makeDangerMap() {
+    return color -> pos -> moves.isDangerous(pos, color);
+  }
 }
-
-

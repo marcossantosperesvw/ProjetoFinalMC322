@@ -50,10 +50,6 @@ class PossibleMoves {
     posColorMovesMap.get(move.movingTo()).put(move.piece().color, move);
   }
 
-  void addAll(Collection<Move> moves) {
-    moves.forEach(m -> add(m));
-  }
-
   Collection<Move> getReadonly(Piece piece) {
     return Collections.unmodifiableCollection(pieceMovesMap.get(piece));
   }

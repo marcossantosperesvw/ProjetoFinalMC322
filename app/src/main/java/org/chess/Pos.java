@@ -39,7 +39,7 @@ public record Pos(int row, int column) {
    * @param color whose perspective is being converted to.
    * @return The transformed position as if color were at the bottom (Row 14).
    */
-  public Pos relativeTo(Color color) {
+  public Pos toPerspective(Color color) {
     return rotateClockwise(
         switch (color) {
           case RED -> 2;
@@ -77,9 +77,9 @@ public record Pos(int row, int column) {
         });
   }
 
-  private Pos rotateClockwise(int nOfRotations) {
-    nOfRotations %= 4;
-    return switch (nOfRotations) {
+  private Pos rotateClockwise(int nOf90degRotations) {
+    nOf90degRotations %= 4;
+    return switch (nOf90degRotations) {
       case 0 -> this;
       case 1 -> new Pos(15 - this.row, this.column);
       case 2 -> new Pos(15 - this.row, 15 - this.column);
