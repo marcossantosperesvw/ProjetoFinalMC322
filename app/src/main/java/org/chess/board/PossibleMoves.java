@@ -1,43 +1,61 @@
 package org.chess.board;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.chess.Color;
 import org.chess.Move;
 import org.chess.Pos;
 import org.chess.pieces.Piece;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.MultimapBuilder;
 
-public class PossibleMoves {
-  private final Map<Pos, Danger> dangerMap = new HashMap<>();
-  private final Map<Piece, List<Move>> movesMap = new HashMap<>();
+class PossibleMoves {
+  private final Map<Pos, Multimap<Color, Move>> posColorMovesMap = new HashMap<>();
+  private final Multimap<Piece, Move> pieceMovesMap = HashMultimap.create();
 
-  public PossibleMoves() {
-    // initialize dangermap
-  }
-
-  public boolean isInDanger(Piece piece) {
-  }
-  public boolean hasMoves(Piece piece) {
-    // check movesMap to see if there is some piece with the right color and with moves
+  PossibleMoves() {
+    var builder = MultimapBuilder.enumKeys(Color.class).hashSetValues();
+    for (Pos pos: Pos.getValidPositions()) {
+      posColorMovesMap.put(pos, builder.build());
+    }
   }
 
-  public void forgetMove(Move move) {
-    // get piece that's beeing moved
-    // remove the move form the movesMap using the piece as key
-    // get move's position
-    // get piece's color
-    // remove the move from the dangerMap using position and color as keys.
+  boolean isDangerous(Pos pos, Color color) {
+    for (Color otherColor : Color.values())
+      if (otherColor != color && !posColorMovesMap.get(pos).get(otherColor).isEmpty())
+        return true;
+    return false;
   }
 
-  public void submitMove(Move move) {
-    // get piece that's beeing moved
-    // add move to the movesMap using the piece as key
-    // get move's position
-    // get piece's color
-    // add move to the dangerMap using position and color as keys.
-    
+  void remove(Move move) {
+    pieceMovesMap.remove(move.piece(), move);
+    posColorMovesMap.get(move.movingTo()).remove(move.piece().color, move);
   }
-  public List<Move> getMovesView(Piece piece) {
+
+  void removeAll(Collection<Move> moves) {
+    moves.forEach(m -> remove(m));
   }
+
+  void removeAll(Piece piece) {
+    removeAll(pieceMovesMap.get(piece));
+  }
+
+  void add(Move move) {
+    pieceMovesMap.put(move.piece(), move);
+    posColorMovesMap.get(move.movingTo()).put(move.piece().color, move);
+  }
+
+  void addAll(Collection<Move> moves) {
+    moves.forEach(m -> add(m));
+  }
+
+  Collection<Move> getReadonly(Piece piece) {
+    return Collections.unmodifiableCollection(pieceMovesMap.get(piece));
+  }
+
 }

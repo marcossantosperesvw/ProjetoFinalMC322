@@ -1,27 +1,18 @@
 package org.chess.pieces;
 
-import java.util.List;
+import java.util.Collection;
 
 import org.chess.Color;
-import org.chess.board.Board;
 import org.chess.Move;
+import org.chess.Pos;
 
 public abstract class Piece {
   public final Color color;
-  public final Board board;
-  
-  public Piece(Color color, Board board) {
+
+  public Piece(Color color) {
     this.color = color;
-    this.board = board;
   }
 
-  public static record MovesCalcResult(List<Move> validMoves, List<Piece> piecesBlockingMoves) {}
-  
-  /**
-   * For a specific piece, calculates valid moves and 
-   * pieces blocking the way, then, returns a record 
-   * (MovesCalcResult) that stores this information.
-   */
-  public abstract MovesCalcResult calculateMoves();
-
+  public static record MovesCalcResult(Collection<Move> moves, Collection<Pos> dependencies) {
+  }
 }

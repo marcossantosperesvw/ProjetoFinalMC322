@@ -1,106 +1,43 @@
 package org.chess.pieces;
 
 import java.util.ArrayList;
+import com.google.common.collect.BiMap;
 
 import org.chess.Color;
-import org.chess.board.Board;
 import org.chess.Move;
+import org.chess.PieceNotInBoard;
 import org.chess.Pos;
-import org.chess.Move.MoveType;
 
 
-public class Rook extends Piece{
+public class Rook extends NonKing{
     
-    public Rook(Color color, Board board){
-        super(color, board);
+    public Rook(Color color){
+        super(color);
     }
 
-    public MovesCalcResult calculateMoves(){
+    public MovesCalcResult calculateMoves(BiMap<Pos, Piece> boardState) throws PieceNotInBoard{
+
+        //Checks if piece is on the board
+        Pos thisPos = boardState.inverse().get(this);
+        if(thisPos == null){
+            throw new PieceNotInBoard();
+        }
+
         //This will be the MovesCalcResult atributes
         ArrayList<Move> validMoves = new ArrayList<Move>();
-        ArrayList<Piece> piecesBlockingMoves = new ArrayList<Piece>();
+        ArrayList<Pos> dependencies = new ArrayList<Pos>();
 
         //getting this piece's position
-        Pos thisPos = super.board.getPos(this);
         int row = thisPos.row();
         int column = thisPos.column();
 
-        //filling up validMoves and piecesBlockingMoves
-        //It checks each side of the rook independently
-        //South
-        int counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row + counter, column);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
+        //Checks directions in wich a Rook can move, filling up the arguments for MovesCalcResult
+        Direction[] possiblDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+        for(Direction direction : possiblDirections){
+            Direction.checkDirection(validMoves, dependencies, this, row, column, boardState, direction);
         }
-        //North
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row - counter, column);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //East
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row, column + counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //West
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row, column - counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-
-        return new MovesCalcResult(validMoves, piecesBlockingMoves);
+        
+        return new MovesCalcResult(validMoves, dependencies);
 
     }
 }

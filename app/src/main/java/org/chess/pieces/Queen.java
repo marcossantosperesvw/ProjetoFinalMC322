@@ -1,179 +1,43 @@
 package org.chess.pieces;
 
 import java.util.ArrayList;
+import com.google.common.collect.BiMap;
 
 import org.chess.Color;
-import org.chess.board.Board;
 import org.chess.Move;
+import org.chess.PieceNotInBoard;
 import org.chess.Pos;
-import org.chess.Move.MoveType;
+
 
 
 public class Queen extends Piece{
     
-    public Queen(Color color, Board board){
-        super(color, board);
+    public Queen(Color color){
+        super(color);
     }
 
-    public MovesCalcResult calculateMoves(){
+    public MovesCalcResult calculateMoves(BiMap<Pos, Piece> boardState) throws PieceNotInBoard{
+
+        //Checks if piece is on the board
+        Pos thisPos = boardState.inverse().get(this);
+        if(thisPos == null){
+            throw new PieceNotInBoard();
+        }
+    
         //This will be the MovesCalcResult atributes
         ArrayList<Move> validMoves = new ArrayList<Move>();
-        ArrayList<Piece> piecesBlockingMoves = new ArrayList<Piece>();
+        ArrayList<Pos> dependencies = new ArrayList<Pos>();
 
         //getting this piece's position
-        Pos thisPos = super.board.getPos(this);
         int row = thisPos.row();
         int column = thisPos.column();
 
-        //filling up validMoves and piecesBlockingMoves
-        //It checks each corner and side of the Queen independently
-
-        //South
-        int counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row + counter, column);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
+    
+        //Checks every direction for possible moves
+        for(Direction direction : Direction.values()){
+            Direction.checkDirection(validMoves, dependencies, this, row, column, boardState, direction);
         }
-        //North
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row - counter, column);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //East
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row, column + counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //West
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row, column - counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //Southeast
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row + counter, column + counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //Southwest
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row + counter, column - counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //Northwest
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row - counter, column + counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-        //Northeast
-        counter = 1;
-        while(true){
-            try{
-                Pos pos = new Pos(row - counter, column - counter);
-                counter++;
-                Piece pieceInPos = super.board.getPiece(pos);
-                if(pieceInPos != null){
-                    piecesBlockingMoves.add(pieceInPos);
-                    if(pieceInPos.color == super.color){
-                        break;
-                    }
-                }
-                validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, pos));
-            }catch(IllegalArgumentException e){
-                break;
-            }
-        }
-
-        return new MovesCalcResult(validMoves, piecesBlockingMoves);
+        return new MovesCalcResult(validMoves, dependencies);
 
     }
 }

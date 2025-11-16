@@ -1,28 +1,35 @@
 package org.chess.pieces;
 
 import java.util.ArrayList;
+import com.google.common.collect.BiMap;
 
 import org.chess.Color;
-import org.chess.board.Board;
 import org.chess.Move;
+import org.chess.PieceNotInBoard;
 import org.chess.Pos;
 import org.chess.Move.MoveType;
 
-public class Knight extends Piece{
 
-    public Knight(Color color, Board board){
-        super(color, board);
+public class Knight extends NonKing{
+
+    public Knight(Color color){
+        super(color);
     }
 
     
 
-    public MovesCalcResult calculateMoves(){
+    public MovesCalcResult calculateMoves(BiMap<Pos, Piece> boardState) throws PieceNotInBoard{
+        //Checks if piece is on the board
+        Pos thisPos = boardState.inverse().get(this);
+        if(thisPos == null){
+            throw new PieceNotInBoard();
+        }
+
         //This will be the MovesCalcResult atributes
         ArrayList<Move> validMoves = new ArrayList<Move>();
-        ArrayList<Piece> piecesBlockingMoves = new ArrayList<Piece>();
+        ArrayList<Pos> dependencies = new ArrayList<Pos>();
 
         //getting this piece's position
-        Pos thisPos = super.board.getPos(this);
         int row = thisPos.row();
         int column = thisPos.column();
 
@@ -44,13 +51,9 @@ public class Knight extends Piece{
         for(int[] pos : possibleMoves){
             try{
                 Pos tempPos = new Pos(pos[0], pos[1]);
-                Piece pieceInPos = super.board.getPiece(tempPos);
-                if(pieceInPos != null){
-					if(pieceInPos.color == super.color){
-						piecesBlockingMoves.add(pieceInPos);
-					}else{
-						validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
-					}
+                Piece pieceInPos = boardState.get(tempPos);
+                if(pieceInPos != null && pieceInPos.color == super.color){
+					dependencies.add(tempPos);
 				}else{
 					validMoves.add(new Move(this, MoveType.SIMPLE_MOVE, tempPos));
 				}
@@ -58,7 +61,7 @@ public class Knight extends Piece{
             }catch(IllegalArgumentException e){}
         }
 
-        return new MovesCalcResult(validMoves, piecesBlockingMoves);
+        return new MovesCalcResult(validMoves, dependencies);
         
     }
 
