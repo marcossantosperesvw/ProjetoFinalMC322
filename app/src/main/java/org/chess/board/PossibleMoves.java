@@ -34,7 +34,7 @@ class PossibleMoves {
 
   void remove(Move move) {
     pieceMovesMap.remove(move.piece(), move);
-    posColorMovesMap.get(move.movingTo()).remove(move.piece().color, move);
+    posColorMovesMap.get(move.toPos()).remove(move.piece().color, move);
   }
 
   void removeAll(Collection<Move> moves) {
@@ -47,7 +47,7 @@ class PossibleMoves {
 
   void add(Move move) {
     pieceMovesMap.put(move.piece(), move);
-    posColorMovesMap.get(move.movingTo()).put(move.piece().color, move);
+    posColorMovesMap.get(move.toPos()).put(move.piece().color, move);
   }
 
   Collection<Move> getReadonly(Piece piece) {

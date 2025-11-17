@@ -31,6 +31,11 @@ public class History {
   public List<Move> getMovesView() {
     return Collections.unmodifiableList(gameHistory);
   }
+
+  public Move getLastMove() {
+	// TODO Auto-generated method stub
+	throw new UnsupportedOperationException("Unimplemented method 'getLastMove'");
+  }
   
   
 }

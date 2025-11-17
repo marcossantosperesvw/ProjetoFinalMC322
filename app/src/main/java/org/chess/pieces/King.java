@@ -9,8 +9,6 @@ import org.chess.Move;
 import org.chess.PieceNotInBoard;
 import org.chess.Pos;
 
-import com.google.common.collect.BiMap;
-
 public class King extends Piece {
 
 	public King(Color color) {
@@ -19,8 +17,10 @@ public class King extends Piece {
 
 	public static Collection<Move> calculateMoves(
 			Collection<King> kings,
-			BiMap<Pos, Piece> getPos,
-			Function<Color, Predicate<Pos>> dangerMap) throws PieceNotInBoard {
+			Function<Pos, Piece> getPiece,
+			Function<Piece, Pos> getPos,
+			Function<Color, Predicate<Pos>> dangerMap
+		) throws PieceNotInBoard {
 
 		throw new UnsupportedOperationException("Unimplemented method 'calculateMoves'");
 	}

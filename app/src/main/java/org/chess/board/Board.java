@@ -3,252 +3,312 @@ package org.chess.board;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
-import org.chess.Clock;
 import org.chess.Color;
 import org.chess.Move;
-import org.chess.Player;
+import org.chess.Move.MoveType;
+import org.chess.PieceNotInBoard;
+import org.chess.PieceType;
 import org.chess.Pos;
 import org.chess.pieces.Bishop;
 import org.chess.pieces.King;
-import org.chess.pieces.Knight;
-import org.chess.pieces.Pawn;
+import org.chess.pieces.NonKing;
 import org.chess.pieces.Piece;
-import org.chess.pieces.Queen;
-import org.chess.pieces.Rook;
+
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 
 /**
- * Board
- * TODO
+ * Manages the relation between each piece and its position.
  */
-public class Board {
-  // ##################################################
+class BoardState {
+  // ###########################################################################
   // Data structures
-  // ##################################################
+  // ###########################################################################
 
-  /** Data structure to store all pieces, and their positions. */
-  private final BoardState boardState = new BoardState();
+  /**
+   * A bi-directional map between Piece and its Pos.
+   */
+  private final BiMap<Pos, Piece> boardState = HashBiMap.create();
 
-  /** Data structure to store all players. */
-  private final Map<Color, Player> players = new EnumMap<>(Color.class);
+  /**
+   * It is used to find which pieces' moves need to be recalculated after a change
+   * in the board's state. It should only be mutated within the `reevaluate`
+   * method. Read the method's docstring to know when it must be called.
+   */
+  private final Dependencies dependencies = new Dependencies();
+
+  /**
+   * It is used to store pieces' moves. It should only be mutated within the
+   * `reevaluate` method. Read the method's docstring to know when it must be
+   * called.
+   */
+  private final PossibleMoves moves = new PossibleMoves();
+
+  private final Map<Color, King> kingsMap = new EnumMap<>(Color.class);
 
   /** Match's history. */
   public final History history = new History();
 
-  // ##################################################
-  // Constructor
-  // ##################################################
+  // ###########################################################################
+  // Public interface
+  // ###########################################################################
 
-  public Board(long clockTimeNanosec) {
-    EnumMap<Color, List<org.chess.pieces.Piece>> playersPieces = new EnumMap<>(Color.class);
-
-    for (Color color : Color.values())
-      playersPieces.put(color, new ArrayList<>());
-
-    for (var pieceAndPos : constructorHelper()) {
-      Color color = pieceAndPos.piece.color;
-      if (pieceAndPos.piece instanceof King king) {
-        players.put(color, new Player(playersPieces.get(color), king, new Clock(clockTimeNanosec), color));
-      }
-      playersPieces.get(color).add(pieceAndPos.piece);
-      boardState.addPiece(pieceAndPos.piece, pieceAndPos.pos);
-    } // TODO: refactor everything.
-  }
-
-  // ##################################################
-  // ReadOnly operations
-  // ##################################################
-
-  public int getNOfPlayers() {
-    return players.size();
-  }
-
-  public Player getPlayer(Color color) {
-    return players.get(color);
-  }
-
-  public Collection<King> getCheckedKings() {
-    return players.values()
-        .stream()
-        .map(p -> p.king())
-        .filter(p -> boardState.isDangerous(boardState.getPos(p), p.color))
-        .toList();
-  }
-
-  public boolean hasMoves(Color color) {
-    for (Piece piece : players.get(color).pieces()) {
-      if (boardState.getReadonlyMoves(piece).size() > 0) // TODO: Find a way to not look through all pieces.
-        return true;
+  public BoardState(Map<Pos, Piece> initialState) {
+    Collection<Piece> needReevaluation = new ArrayList<>();
+    for (Entry<Pos, Piece> entrySet : initialState.entrySet()) {
+      needReevaluation.addAll(addPieceHelper(entrySet.getKey(), entrySet.getValue()));
     }
-    return false;
+    reevaluate(needReevaluation);
   }
 
-  public Collection<Move> getMovesView(Piece piece) {
-    return boardState.getReadonlyMoves(piece);
+  public Collection<Move> getReadonlyMoves(Piece piece) {
+    return moves.getReadonly(piece);
   }
 
-  // ##################################################
-  // Mutating operations
-  // ##################################################
+  public Piece doMove(Move move) {
+    MoveType moveType = move.type();
+    Piece piece = move.piece();
+    Pos toPos = move.toPos();
+    Color color = piece.color;
 
-  public void doMove(Move move) {
-    // TODO: check player clock to see if it still has time?
-    // TODO: add to hystory
-    switch (move.type()) {
+    history.addMove(move);
+
+    switch (moveType) {
       case SIMPLE_MOVE:
-        boardState.movePiece(move.piece(), move.movingTo());
-        break;
-      case BISHOP_PROMOTION:
-        boardState.movePiece(move.piece(), move.movingTo());
-        boardState.removePiece(move.piece());
-        Piece bishop = new Bishop(move.piece().color, this);
-        boardState.addPiece(bishop, move.movingTo());
-        break;
-      case QUEEN_PROMOTION:
-        boardState.movePiece(move.piece(), move.movingTo());
-        boardState.removePiece(move.piece());
-        Piece queen = new Queen(move.piece().color, this);
-        boardState.addPiece(queen, move.movingTo());
-        break;
-      case ROOK_PROMOTION:
-        boardState.movePiece(move.piece(), move.movingTo());
-        boardState.removePiece(move.piece());
-        Piece rook = new Rook(move.piece().color, this);
-        boardState.addPiece(rook, move.movingTo());
-        break;
-      case KNIGHT_PROMOTION:
-        boardState.movePiece(move.piece(), move.movingTo());
-        boardState.removePiece(move.piece());
-        Piece knight = new Knight(move.piece().color, this);
-        boardState.addPiece(knight, move.movingTo());
-        break;
-      case KINGSIDE_CASTLING:
-        boardState.movePiece(move.piece(), move.movingTo());
-        Pos rookPos = switch (move.piece().color) {
-          case RED -> new Pos(1, 6);
-          case BLUE -> new Pos(9, 14);
-          case YELLOW -> new Pos(6, 1);
-          case GREEN -> new Pos(14, 9);
+        return movePiece(piece, toPos);
+
+      case BISHOP_PROMOTION, QUEEN_PROMOTION, ROOK_PROMOTION, KNIGHT_PROMOTION:
+        Piece promotionPiece = switch (moveType) {
+          case BISHOP_PROMOTION -> new Bishop(color);
+          case QUEEN_PROMOTION -> new Bishop(color);
+          case ROOK_PROMOTION -> new Bishop(color);
+          case KNIGHT_PROMOTION -> new Bishop(color);
+          default -> throw new IllegalStateException("Unexpected Enum.");
         };
-        // TODO: get player's rook
-        // boardState.movePiece(players, rookPos);
-        break;
-      case QUEENSIDE_CASTLING:
-        break;
+        Piece takenPiece = movePiece(piece, toPos);
+        removePiece(piece);
+        addPiece(promotionPiece, toPos);
+        return takenPiece;
+
+      case KINGSIDE_CASTLING, QUEENSIDE_CASTLING:
+        Pos rookInitialPos = switch (moveType) {
+          case KINGSIDE_CASTLING -> rookInitialPos = PieceType.KINGSIDE_ROOK.initialPos(color);
+          case QUEENSIDE_CASTLING -> rookInitialPos = PieceType.QUEENSIDE_ROOK.initialPos(color);
+          default -> throw new IllegalStateException("Unexpected Enum.");
+        };
+        Pos rookCastlingPos = switch (moveType) {
+          case KINGSIDE_CASTLING -> rookCastlingPos = PieceType.KINGSIDE_BISHOP.initialPos(color);
+          case QUEENSIDE_CASTLING -> rookCastlingPos = PieceType.QUEEN.initialPos(color);
+          default -> throw new IllegalStateException("Unexpected Enum.");
+        };
+        movePiece(getPiece(rookInitialPos), rookCastlingPos);
+        return movePiece(piece, toPos);
+
+      case EN_PASSANT:
+        Move lastMove = history.getLastMove();
+        Piece eatenPiece = getPiece(lastMove.toPos());
+        removePiece(eatenPiece);
+        movePiece(piece, toPos);
+        return eatenPiece;
+
       default:
-        throw new IllegalStateException("Unexpected enum.");
+        throw new IllegalStateException("Unexpected Enum.");
     }
   }
 
-  // ##################################################
-  // Helper methods
-  // ##################################################
+  // ###########################################################################
+  // Private read-only operations
+  // ###########################################################################
+
+  private Pos getPos(Piece piece) {
+    return boardState.inverse().get(piece);
+  }
+
+  private Piece getPiece(Pos pos) {
+    return boardState.get(pos);
+  }
+
+  private Function<Piece, Pos> makeGetPos(Color color) {
+    return (piece) -> getPos(piece).toPerspective(color);
+  }
+
+  private Function<Piece, Pos> makeGetPos() {
+    return (piece) -> getPos(piece);
+  }
+
+  private Function<Pos, Piece> makeGetPiece(Color color) {
+    return (pos) -> getPiece(pos.fromPerspective(color));
+  }
+
+  private Function<Pos, Piece> makeGetPiece() {
+    return (pos) -> getPiece(pos);
+  }
+
+  private Function<Color, Predicate<Pos>> makeDangerMap() {
+    return color -> pos -> moves.isDangerous(pos, color);
+  }
+
+  // ###########################################################################
+  // Private mutating operations
+  // ###########################################################################
 
   /**
-   * A helper record.
+   * @param piece
+   * @param pos
+   * @throws IllegalArgumentException if parameters are null, or if there's
+   *                                  already a
+   *                                  piece at pos, or if the piece is already on
+   *                                  the board.
    */
-  private static record ConstructorHelper(Piece piece, Pos pos) {
+  private void addPiece(Piece piece, Pos pos) {
+    reevaluate(addPieceHelper(pos, piece));
+
+  }
+
+  private Collection<Piece> addPieceHelper(Pos pos, Piece piece) {
+    Objects.requireNonNull(piece, "piece should not be null.");
+    Objects.requireNonNull(pos, "pos should not be null.");
+
+    if (boardState.get(pos) != null) {
+      throw new IllegalArgumentException("Invalid Position: There's already a piece at this position.");
+    }
+
+    try {
+      boardState.put(pos, piece);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          "Invalid Piece: This piece is already at another position. Use .move instead.");
+    }
+
+    if (piece instanceof King king) {
+      if (kingsMap.get(king.color) != null)
+        throw new IllegalArgumentException("Invalid King: cannot add two kings with the same color.");
+      kingsMap.put(king.color, king);
+    }
+
+    Collection<Piece> needReevaluation = dependencies.getDependents(pos);
+    needReevaluation.add(piece);
+    return needReevaluation;
   }
 
   /**
-   * A helper function to construct all pieces. The pieces follow the layout
-   * below, with red on top, yellow on the left side, blue on the right side and
-   * green on the bottom.
-   * Top left corner is (1,1).
-   *
-   * ___rkbKqbkr___
-   * ___pppppppp___
-   * ___@@@@@@@@___
-   * rp@@@@@@@@@@pr
-   * kp@@@@@@@@@@pk
-   * bp@@@@@@@@@@pb
-   * Kp@@@@@@@@@@pq
-   * qp@@@@@@@@@@pK
-   * bp@@@@@@@@@@pb
-   * kp@@@@@@@@@@pk
-   * rp@@@@@@@@@@pr
-   * ___@@@@@@@@___
-   * ___pppppppp___
-   * ___rkbqKbkr___
-   * 
-   * @return All pieces and their positions.
+   * @param piece
+   * @throws IllegalArgumentException if piece is not on the board
    */
-  private ConstructorHelper[] constructorHelper() {
-    ConstructorHelper[] array = {
-        new ConstructorHelper(new Rook(Color.RED, this), new Pos(1, 4)),
-        new ConstructorHelper(new Knight(Color.RED, this), new Pos(1, 5)),
-        new ConstructorHelper(new Bishop(Color.RED, this), new Pos(1, 6)),
-        new ConstructorHelper(new King(Color.RED, this), new Pos(1, 7)),
-        new ConstructorHelper(new Queen(Color.RED, this), new Pos(1, 8)),
-        new ConstructorHelper(new Bishop(Color.RED, this), new Pos(1, 9)),
-        new ConstructorHelper(new Knight(Color.RED, this), new Pos(1, 10)),
-        new ConstructorHelper(new Rook(Color.RED, this), new Pos(1, 11)),
+  private void removePiece(Piece piece) {
+    reevaluate(removePieceHelper(piece));
+  }
 
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 4)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 5)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 6)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 7)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 8)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 9)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 10)),
-        new ConstructorHelper(new Pawn(Color.RED, this), new Pos(2, 11)),
+  private Collection<Piece> removePieceHelper(Piece piece) {
+    Pos pos = boardState.inverse().remove(piece);
+    if (pos == null) {
+      throw new IllegalArgumentException("Invalid Piece: This piece is not on the board.");
+    }
+    if (piece instanceof King king) {
+      kingsMap.remove(king.color);
+    }
+    Collection<Piece> needReevaluation = dependencies.getDependents(pos);
+    needReevaluation.add(piece);
+    return needReevaluation;
+  }
 
-        new ConstructorHelper(new Rook(Color.YELLOW, this), new Pos(4, 14)),
-        new ConstructorHelper(new Knight(Color.YELLOW, this), new Pos(5, 14)),
-        new ConstructorHelper(new Bishop(Color.YELLOW, this), new Pos(6, 14)),
-        new ConstructorHelper(new Queen(Color.YELLOW, this), new Pos(7, 14)),
-        new ConstructorHelper(new King(Color.YELLOW, this), new Pos(8, 14)),
-        new ConstructorHelper(new Bishop(Color.YELLOW, this), new Pos(9, 14)),
-        new ConstructorHelper(new Knight(Color.YELLOW, this), new Pos(10, 14)),
-        new ConstructorHelper(new Rook(Color.YELLOW, this), new Pos(11, 14)),
+  /**
+   * @param piece
+   * @param toPos
+   * @return The piece that was taken, if any.
+   * @throws IllegalArgumentException if piece is not on the board
+   */
+  private Piece movePiece(Piece piece, Pos toPos) {
+    Pos fromPos = boardState.inverse().get(piece);
+    if (fromPos == null) {
+      throw new IllegalArgumentException("Invalid piece: This piece is not on the board.");
+    }
 
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(4, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(5, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(6, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(7, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(8, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(9, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(10, 13)),
-        new ConstructorHelper(new Pawn(Color.YELLOW, this), new Pos(11, 13)),
+    Collection<Piece> needReevaluation = dependencies.getDependents(fromPos);
+    needReevaluation.addAll(dependencies.getDependents(toPos));
+    needReevaluation.add(piece);
 
-        new ConstructorHelper(new Rook(Color.BLUE, this), new Pos(4, 1)),
-        new ConstructorHelper(new Knight(Color.BLUE, this), new Pos(5, 1)),
-        new ConstructorHelper(new Bishop(Color.BLUE, this), new Pos(6, 1)),
-        new ConstructorHelper(new King(Color.BLUE, this), new Pos(7, 1)),
-        new ConstructorHelper(new Queen(Color.BLUE, this), new Pos(8, 1)),
-        new ConstructorHelper(new Bishop(Color.BLUE, this), new Pos(9, 1)),
-        new ConstructorHelper(new Knight(Color.BLUE, this), new Pos(10, 1)),
-        new ConstructorHelper(new Rook(Color.BLUE, this), new Pos(11, 1)),
+    Piece capturedPiece = getPiece(toPos);
+    if (capturedPiece != null) {
+      needReevaluation.addAll(removePieceHelper(piece));
+    }
 
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(4, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(5, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(6, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(7, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(8, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(9, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(10, 2)),
-        new ConstructorHelper(new Pawn(Color.BLUE, this), new Pos(11, 2)),
+    boardState.forcePut(toPos, piece);
 
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 4)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 5)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 6)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 7)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 8)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 9)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 10)),
-        new ConstructorHelper(new Pawn(Color.GREEN, this), new Pos(13, 11)),
+    reevaluate(needReevaluation);
 
-        new ConstructorHelper(new Rook(Color.GREEN, this), new Pos(14, 4)),
-        new ConstructorHelper(new Knight(Color.GREEN, this), new Pos(14, 5)),
-        new ConstructorHelper(new Bishop(Color.GREEN, this), new Pos(14, 6)),
-        new ConstructorHelper(new Queen(Color.GREEN, this), new Pos(14, 7)),
-        new ConstructorHelper(new King(Color.GREEN, this), new Pos(14, 8)),
-        new ConstructorHelper(new Bishop(Color.GREEN, this), new Pos(14, 9)),
-        new ConstructorHelper(new Knight(Color.GREEN, this), new Pos(14, 10)),
-        new ConstructorHelper(new Rook(Color.GREEN, this), new Pos(14, 11)),
-    };
-    return array;
+    return capturedPiece;
+  }
+
+  /**
+   * This is a function to mutate the `dependencies` and `moves` data structures.
+   * Every time a change happens to a position (i.e.: a piece moves to it, or a
+   * piece is added to it, or a piece is removed from it) all pieces that depend
+   * on that position must be reevaluated, as well as the piece that got
+   * added/removed/moved.
+   * 
+   * @param pieces that need to be reevaluated
+   */
+  private void reevaluate(Collection<Piece> pieces) {
+    for (Piece piece : pieces) {
+      if (piece instanceof NonKing nonKing) {
+        reevaluate(nonKing);
+      }
+    }
+    // Since kings can't checkmate themselves, they need to know every move from
+    // every piece. Therefore their calculation must be deferred.
+    reevaluateKings();
+  }
+
+  /**
+   * Reevaluation consists of:
+   * - Removing from the data structures all stored moves and dependencies from a
+   * piece.
+   * - Calculating all dependencies and possible moves.
+   * - Adding them to the data structures.
+   * 
+   * Since `calculateMoves` assumes the piece is from the player in the bottom,
+   * the board must be rotated before sending it to the piece, and the result must
+   * be rotated back.
+   */
+  private void reevaluate(NonKing piece) {
+    moves.removeAll(piece);
+    dependencies.removeAll(piece);
+    try {
+      var calcResult = piece.calculateMoves(
+          makeGetPiece(piece.color),
+          makeGetPos(piece.color));
+
+      for (Pos pos : calcResult.dependencies()) {
+        dependencies.add(piece, pos.fromPerspective(piece.color));
+      }
+
+      for (Move m : calcResult.moves()) {
+        moves.add(new Move(
+            m.piece(),
+            m.type(),
+            m.toPos().fromPerspective(piece.color)));
+      }
+    } catch (PieceNotInBoard e) {
+      throw new IllegalStateException("Tried to reevaluate piece that's not on the board");
+    }
+  }
+
+  private void reevaluateKings() {
+    var kings = kingsMap.values();
+    for (King king : kings) {
+      moves.removeAll(king);
+    }
+    try {
+      King.calculateMoves(kings, makeGetPiece(), makeGetPos(), makeDangerMap()).forEach(moves::add);
+    } catch (PieceNotInBoard e) {
+      throw new IllegalStateException("Tried to reevaluate piece that's not on the board");
+    }
   }
 }
